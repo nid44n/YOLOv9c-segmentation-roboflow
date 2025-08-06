@@ -1,0 +1,96 @@
+## Make sure to connect to the GPU 
+!nvidia-smi
+import os
+HOME = os.getcwd()
+print(HOME)
+## Clone and install
+!pip install ultralytics
+from IPython import display
+display.clear_output()
+import ultralytics
+ultralytics.checks()
+from ultralytics import YOLO
+from IPython.display import display, Image
+#CLI
+%cd {HOME}
+!yolo task=segment mode=predict model=yolov9c-seg.pt conf=0.25 source='https://media.roboflow.com/notebooks/examples/dog.jpeg'
+%cd {HOME}
+Image(filename='runs/segment/predict/dog.jpeg', height=600)
+!mkdir {HOME}/datasets
+%cd {HOME}/datasets
+
+!pip install roboflow --quiet
+
+from roboflow import Roboflow
+rf = Roboflow(api_key="insert the key provided by roboflow")
+project = rf.workspace("mikroalgaaaa").project("mikroalga-bersatu")
+version = project.version(4)
+dataset = version.download("yolov9")
+
+## Don't forget to determine the epoch you want to use
+%cd {HOME}
+!yolo task=segment mode=train model=yolov9c-seg.pt data={dataset.location}/data.yaml epochs=50 imgsz=640
+
+## Code for training results
+from IPython.display import Image
+Image(filename=f"{HOME}/runs/segment/train2/results.png", width=1000)
+
+from IPython.display import Image
+Image(filename=f"{HOME}/runs/segment/train2/confusion_matrix.png", width=1000)
+
+from IPython.display import Image
+Image(filename=f"{HOME}/runs/segment/train2/val_batch1_pred.jpg", width=1000)
+
+#worked!
+from ultralytics import YOLO
+
+# Load a model
+model = YOLO("yolov9c-seg.pt")  # load an official model
+model = YOLO("/content/runs/segment/train2/weights/best.pt")  # load a custom model
+
+# Validate the model
+metrics = model.val()  # no arguments needed, dataset and settings remembered
+
+%cd {HOME}
+!yolo task=segment mode=predict model={HOME}/runs/segment/train2/weights/best.pt conf=0.25 source={dataset.location}/test/images save=true
+
+import glob
+from IPython.display import Image, display
+
+for image_path in glob.glob(f'{HOME}/runs/segment/predict2/*.jpg')[:3]:
+      display(Image(filename=image_path, height=600))
+      print("\n")
+
+
+%cd {HOME}
+!yolo task=segment mode=val model={HOME}/runs/segment/train2/weights/best.pt data={dataset.location}/data.yaml
+
+# Add a delay to allow the results.txt file to be generated
+import time
+time.sleep(5)  # Wait for 5 seconds
+
+# Extract mAP from the validation output
+# Use a try-except block to handle potential file not found error
+try:
+    with open('{HOME}/runs/segment/val2/results.txt', 'r') as f:
+        results = f.readlines()
+
+    for line in results:
+        if line.startswith('mAP@.5'):
+            map_50 = float(line.split()[-1])
+            print(f'mAP@.5: {map_50}')
+        elif line.startswith('mAP@.5:.95'):
+            map_50_95 = float(line.split()[-1])
+            print(f'mAP@.5:.95: {map_50_95}')
+
+except FileNotFoundError:
+    print("Warning: 'results.txt' not found. Check if validation completed successfully.")
+
+from google.colab import drive
+drive.mount('/content/drive')
+
+import shutil
+shutil.make_archive('runs_archive', 'zip', 'runs')
+
+from google.colab import files
+files.download('runs_archive.zip')
